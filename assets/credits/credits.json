@@ -1,0 +1,32 @@
+{
+  "generated": "2026-11-16",
+  "required_notices": [
+    {
+      "source": "three.js (GitHub mrdoob/three.js)",
+      "license": "MIT",
+      "lines": [
+        "Copyright © 2010-2026 three.js authors — MIT License (앱 오픈소스 고지에 MIT 전문 포함)"
+      ],
+      "items": [
+        "three.js example texture water/Water_1_M_Normal.jpg",
+        "three.js example texture water/Water_2_M_Normal.jpg",
+        "three.js example texture waternormals.jpg"
+      ]
+    }
+  ],
+  "thanks": [
+    {
+      "source": "SKY LEGACY 자체 생성(05_clouds_water.py)",
+      "license": "자체 저작물 (CC0로 공개 가능)",
+      "lines": [
+        "표기 불필요"
+      ],
+      "items": [
+        "구름 분포 마스크",
+        "구름 스프라이트 아틀라스 2x2",
+        "타일형 구름 노이즈",
+        "타일형 해안 거품 마스크"
+      ]
+    }
+  ]
+}

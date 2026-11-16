@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "generated": "2026-11-16",
+  "base": "/",
+  "themes": {
+    "A_island": {
+      "label": "테마 A · 화산섬(새벽·정오) — 울릉도 지형",
+      "terrain": null,
+      "textures": [],
+      "hdri": [],
+      "vegetation": []
+    },
+    "B_snow": {
+      "label": "테마 B · 설산(폭풍) — 설악산 지형",
+      "terrain": null,
+      "textures": [],
+      "hdri": [],
+      "vegetation": []
+    }
+  },
+  "terrain": {},
+  "textures": {},
+  "hdri": {},
+  "vegetation": {},
+  "clouds": {
+    "cloud_noise_rgba": "assets/clouds/cloud_noise_rgba.png",
+    "cloud_puffs_atlas": "assets/clouds/cloud_puffs_atlas.png",
+    "weather_map": "assets/clouds/weather_map.png"
+  },
+  "water": {
+    "foam": "assets/water/foam.png",
+    "water_normal_1": "assets/water/water_normal_1.jpg",
+    "water_normal_2": "assets/water/water_normal_2.jpg",
+    "waternormals": "assets/water/waternormals.jpg"
+  },
+  "credits": "assets/credits/credits.json"
+}
