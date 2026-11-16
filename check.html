@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SKY LEGACY 에셋 점검 (Asset check)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font: 14px/1.5 system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: #0e1116; color: #d9dee7; }
+  header { padding: 16px 20px; border-bottom: 1px solid #222a35; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: #8a94a6; font-size: 13px; }
+  .bar { display: flex; gap: 16px; padding: 12px 20px; flex-wrap: wrap; }
+  .pill { padding: 6px 12px; border-radius: 999px; background: #18202b; }
+  .ok { color: #5fd38d; } .warn { color: #f0c05a; } .bad { color: #ff6b6b; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 20px; border-bottom: 1px solid #1a212c; vertical-align: top; }
+  th { color: #8a94a6; font-weight: 500; position: sticky; top: 0; background: #0e1116; }
+  td.path { font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+  .previews { display: flex; gap: 12px; padding: 12px 20px; flex-wrap: wrap; }
+  .previews figure { margin: 0; background: #18202b; padding: 8px; border-radius: 8px; }
+  .previews img { display: block; width: 180px; height: 180px; object-fit: cover; background: #3a6db5; }
+  .previews figcaption { font-size: 12px; color: #8a94a6; margin-top: 4px; }
+  button { background: #2a6df4; color: white; border: 0; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+<header>
+  <h1>에셋 점검 (Asset check)</h1>
+  <div class="sub" id="where">불러오는 중…</div>
+</header>
+<div class="bar">
+  <span class="pill" id="sumOk">정상 0</span>
+  <span class="pill" id="sumWarn">주의 0</span>
+  <span class="pill" id="sumBad">오류 0</span>
+  <span class="pill" id="sumSize">합계 0 MB</span>
+  <button id="rerun">다시 점검 (Re-check)</button>
+</div>
+<div class="previews" id="previews"></div>
+<table>
+  <thead><tr><th>상태</th><th>분류</th><th>파일</th><th>크기</th><th>설명</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<script>
+(() => {
+  // 이 페이지는 assets/check.html 에 놓인다. assets 폴더의 부모 = 에셋 기준 주소.
+  const BASE = new URL("../", location.href);
+  const $ = (id) => document.getElementById(id);
+  const MAGIC = {
+    png: [0x89, 0x50, 0x4e, 0x47], jpg: [0xff, 0xd8, 0xff], jpeg: [0xff, 0xd8, 0xff],
+    glb: [0x67, 0x6c, 0x54, 0x46], webp: [0x52, 0x49, 0x46, 0x46], hdr: [0x23, 0x3f],
+  };
+  let counts, total;
+
+  function row(state, cat, path, size, note) {
+    counts[state]++;
+    const cls = { ok: "ok", warn: "warn", bad: "bad" }[state];
+    const label = { ok: "정상", warn: "주의", bad: "오류" }[state];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="${cls}">${label}</td><td>${cat}</td><td class="path"></td>` +
+      `<td>${size == null ? "-" : (size / 1e6).toFixed(2) + " MB"}</td><td></td>`;
+    tr.children[2].textContent = path;
+    tr.children[4].textContent = note || "";
+    $("rows").appendChild(tr);
+    $("sumOk").textContent = `정상 ${counts.ok}`;
+    $("sumWarn").innerHTML = `<span class="warn">주의 ${counts.warn}</span>`;
+    $("sumBad").innerHTML = `<span class="bad">오류 ${counts.bad}</span>`;
+    $("sumSize").textContent = `합계 ${(total / 1e6).toFixed(1)} MB`;
+  }
+
+  async function checkFile(cat, path, extra) {
+    const url = new URL(path, BASE).href;
+    let res;
+    try { res = await fetch(url, { cache: "no-store" }); }
+    catch (e) { return row("bad", cat, path, null, "불러오기 실패(경로·CORS 확인): " + e.message); }
+    if (!res.ok) return row("bad", cat, path, null, `HTTP ${res.status} — 파일이 없거나 경로가 다릅니다`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    total += buf.length;
+    const ext = path.split(".").pop().toLowerCase();
+    const m = MAGIC[ext];
+    if (buf.length === 0) return row("bad", cat, path, 0, "빈 파일");
+    if (m && !m.every((b, i) => buf[i] === b)) {
+      const head = new TextDecoder().decode(buf.slice(0, 40)).replace(/\s+/g, " ");
+      return row("bad", cat, path, buf.length, `파일 머리가 ${ext} 형식이 아님 → 손상 또는 HTML 오류 페이지 ("${head}")`);
+    }
+    if (ext === "r16" && extra && extra.size_px) {
+      const want = extra.size_px * extra.size_px * 2;
+      if (buf.length !== want) return row("bad", cat, path, buf.length, `크기 불일치: ${want} 바이트여야 함`);
+      const v = new Uint16Array(buf.buffer, buf.byteOffset, buf.length / 2);
+      let lo = 65535, hi = 0; for (let i = 0; i < v.length; i += 7) { if (v[i] < lo) lo = v[i]; if (v[i] > hi) hi = v[i]; }
+      if (hi === lo) return row("warn", cat, path, buf.length, "높이 값이 전부 같음(평평한 지형)");
+      return row("ok", cat, path, buf.length, `16비트 높이 ${extra.size_px}², 고도 ${extra.min_elevation_m} ~ ${extra.max_elevation_m} m`);
+    }
+    let note = "";
+    if (buf.length > 8e6) { return row("warn", cat, path, buf.length, "8MB 초과 — 모바일 로딩이 느릴 수 있음"); }
+    if (ext === "json") { try { JSON.parse(new TextDecoder().decode(buf)); note = "JSON 정상"; } catch { return row("bad", cat, path, buf.length, "JSON 형식 오류"); } }
+    row("ok", cat, path, buf.length, note);
+  }
+
+  function preview(src, cap) {
+    const f = document.createElement("figure");
+    f.innerHTML = `<img alt=""><figcaption></figcaption>`;
+    f.querySelector("img").src = new URL(src, BASE).href;
+    f.querySelector("figcaption").textContent = cap;
+    $("previews").appendChild(f);
+  }
+
+  async function run() {
+    counts = { ok: 0, warn: 0, bad: 0 }; total = 0;
+    $("rows").innerHTML = ""; $("previews").innerHTML = "";
+    let man;
+    try {
+      const r = await fetch(new URL("assets/manifest.json", BASE), { cache: "no-store" });
+      man = await r.json();
+    } catch (e) {
+      $("where").innerHTML = `<span class="bad">assets/manifest.json 을 읽지 못했습니다.</span> 이 페이지가 assets 폴더 안에 있는지 확인하세요.`;
+      return;
+    }
+    const baseNote = /^https?:/.test(man.base) && !location.href.startsWith(man.base)
+      ? ` · <span class="warn">manifest.base(${man.base})와 현재 주소가 다릅니다 — 앱의 ASSET_BASE를 확인하세요</span>` : "";
+    $("where").innerHTML = `에셋 기준 주소: ${BASE.href} · manifest ${man.generated}${baseNote}`;
+
+    const jobs = [];
+    const add = (cat, p, extra) => p && jobs.push(checkFile(cat, p, extra));
+    for (const [name, t] of Object.entries(man.terrain || {})) {
+      for (const [k, p] of Object.entries(t.files || {})) add(`terrain/${name}`, p, k === "heightmap_r16" ? t : null);
+      if (t.files && t.files.preview) preview(t.files.preview, `지형 ${name}`);
+      if (t.files && t.files.albedo_s2_2016) preview(t.files.albedo_s2_2016, `위성 색상 ${name}`);
+    }
+    for (const [name, m] of Object.entries(man.textures || {})) {
+      for (const p of Object.values(m.maps || {})) add(`textures/${name}`, p);
+      if (m.maps && m.maps.albedo) preview(m.maps.albedo, `재질 ${m.label || name}`);
+    }
+    for (const [name, h] of Object.entries(man.hdri || {})) add(`hdri`, h.url);
+    for (const [name, v] of Object.entries(man.vegetation || {})) add(`vegetation`, v.url);
+    for (const [k, p] of Object.entries(man.clouds || {})) add("clouds", p);
+    for (const [k, p] of Object.entries(man.water || {})) add("water", p);
+    if (man.clouds && man.clouds.cloud_puffs_atlas) preview(man.clouds.cloud_puffs_atlas, "구름 스프라이트");
+    add("credits", man.credits);
+    await Promise.all(jobs);
+    const themes = Object.entries(man.themes || {}).map(([k, t]) =>
+      `${k}: 지형 ${t.terrain || "없음"} · 재질 ${t.textures.length} · HDRI ${t.hdri.length} · 수목 ${t.vegetation.length}`).join("  |  ");
+    $("where").innerHTML += `<br>${themes}`;
+  }
+  $("rerun").onclick = run;
+  run();
+})();
+</script>
+</body>
+</html>
